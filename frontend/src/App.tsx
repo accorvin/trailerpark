@@ -4,6 +4,7 @@ import DealsPage from './pages/DealsPage';
 import ListingsPage from './pages/ListingsPage';
 import ListingDetailPage from './pages/ListingDetailPage';
 import BuyersPage from './pages/BuyersPage';
+import BuyerDetailPage from './pages/BuyerDetailPage';
 import MatchesPage from './pages/MatchesPage';
 import BenchmarksPage from './pages/BenchmarksPage';
 import ArchivePage from './pages/ArchivePage';
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/listings" element={<ListingsPage />} />
           <Route path="/listings/:id" element={<ListingDetailPage />} />
           <Route path="/buyers" element={<BuyersPage />} />
+          <Route path="/buyers/:id" element={<BuyerDetailPage />} />
           <Route path="/matches" element={<MatchesPage />} />
           <Route path="/benchmarks" element={<BenchmarksPage />} />
           <Route path="/glossary" element={<GlossaryPage />} />

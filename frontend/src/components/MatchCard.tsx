@@ -37,9 +37,12 @@ export default function MatchCard({ match }: Props) {
           <p className="text-xs font-medium text-gray-400 uppercase mb-1">Buyer Request</p>
           {buyer && (
             <>
-              <p className="font-medium text-gray-900">
+              <Link
+                to={`/buyers/${buyer.id}`}
+                className="font-medium text-blue-600 hover:underline"
+              >
                 {[buyer.make, buyer.model].filter(Boolean).join(' ') || 'Any'}
-              </p>
+              </Link>
               <p className="text-sm text-gray-500">
                 {buyer.year_min && buyer.year_max
                   ? `${buyer.year_min}-${buyer.year_max}`

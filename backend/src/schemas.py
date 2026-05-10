@@ -97,6 +97,7 @@ class BuyerRequestResponse(BuyerRequestBase):
 
 
 class BuyerDetailResponse(BuyerRequestResponse):
+    email: "EmailResponse | None" = None
     matches: list["MatchResponse"] = []
     source_mappings: list[FieldSourceMapping] = []
     original_extracted_data: dict | None = None

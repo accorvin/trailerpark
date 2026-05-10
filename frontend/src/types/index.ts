@@ -58,7 +58,10 @@ export interface BuyerRequest {
 }
 
 export interface BuyerDetail extends BuyerRequest {
+  email: Email | null;
   matches: Match[];
+  source_mappings: FieldSourceMapping[];
+  original_extracted_data: Record<string, unknown> | null;
 }
 
 export interface PriceBenchmark {

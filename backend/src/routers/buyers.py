@@ -39,7 +39,7 @@ def list_buyers(
 def get_buyer(buyer_id: int, db: Session = Depends(get_db)):
     buyer = (
         db.query(BuyerRequest)
-        .options(joinedload(BuyerRequest.matches))
+        .options(joinedload(BuyerRequest.matches), joinedload(BuyerRequest.email))
         .filter(BuyerRequest.id == buyer_id)
         .first()
     )
