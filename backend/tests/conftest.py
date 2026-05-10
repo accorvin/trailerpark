@@ -12,6 +12,8 @@ from sqlalchemy.pool import StaticPool
 # Set required env vars before importing app code
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("SESSION_SECRET", "test-secret-key-for-testing-only")
+os.environ.setdefault("ALLOWED_EMAIL", "test@test.com")
 
 from src.database import Base, get_db
 from src.models import (
@@ -89,8 +91,15 @@ def client(db_engine):
             session.close()
 
     from src.main import app
+    from src.routers.auth import _get_serializer, SESSION_COOKIE
+
     app.dependency_overrides[get_db] = _get_test_db
-    with TestClient(app) as c:
+
+    # Create a valid session cookie for tests
+    serializer = _get_serializer()
+    session_value = serializer.dumps({"email": "test@test.com", "t": 0})
+
+    with TestClient(app, cookies={SESSION_COOKIE: session_value}) as c:
         yield c
     app.dependency_overrides.clear()
 

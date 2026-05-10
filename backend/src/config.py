@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     GMAIL_QUERY: str = "label:inbox"
     GMAIL_INITIAL_SYNC_DAYS: int = 30
 
+    # Auth
+    SESSION_SECRET: str | None = None
+    ALLOWED_EMAIL: str | None = None
+
     # Base URL for OAuth callbacks (set automatically on Railway)
     BASE_URL: str | None = None
 

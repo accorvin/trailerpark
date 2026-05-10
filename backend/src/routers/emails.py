@@ -5,18 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Email, GmailSyncState
+from ..models import Email
 from ..schemas import EmailResponse, PaginatedResponse
 from ..services.gmail_client import is_gmail_configured
 
 router = APIRouter(tags=["emails"])
-
-
-class GmailStatusResponse(BaseModel):
-    connected: bool
-    last_sync_at: str | None = None
-    last_sync_status: str | None = None
-    last_sync_error: str | None = None
 
 
 class SyncResponse(BaseModel):
@@ -54,25 +47,12 @@ def list_emails(
     )
 
 
-@router.get("/auth/gmail/status", response_model=GmailStatusResponse)
-def gmail_status(db: Session = Depends(get_db)):
-    connected = is_gmail_configured()
-    sync_state = db.query(GmailSyncState).first()
-
-    return GmailStatusResponse(
-        connected=connected,
-        last_sync_at=sync_state.last_sync_at.isoformat() if sync_state and sync_state.last_sync_at else None,
-        last_sync_status=sync_state.last_sync_status if sync_state else None,
-        last_sync_error=sync_state.last_sync_error if sync_state else None,
-    )
-
-
 @router.post("/emails/sync", response_model=SyncResponse)
 def sync_emails(db: Session = Depends(get_db)):
     if not is_gmail_configured():
         return SyncResponse(
             processed=0,
-            message="Gmail not configured. Run: uv run python -m src.setup_gmail",
+            message="Gmail not connected. Please log in to connect your Gmail account.",
         )
 
     from ..services.email_ingestion import scan_emails

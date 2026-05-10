@@ -1,12 +1,13 @@
 import logging
-import os
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from .config import get_settings
 
@@ -42,6 +43,43 @@ setup_logging()
 logger = logging.getLogger(__name__)
 
 
+# Auth paths that must be accessible without a session
+PUBLIC_PATH_PREFIXES = (
+    "/api/auth/login",
+    "/api/auth/callback",
+    "/api/auth/status",
+    "/docs",
+    "/openapi.json",
+    "/redoc",
+)
+
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    """Require a valid session cookie for all /api/* routes (except auth endpoints)."""
+
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # Skip auth for public paths and non-API routes (static files handled by mount)
+        if not path.startswith("/api/") or path.startswith(PUBLIC_PATH_PREFIXES):
+            return await call_next(request)
+
+        # Check session
+        from .routers.auth import verify_session, SESSION_COOKIE, set_session_cookie
+        email = verify_session(request)
+        if not email:
+            # API calls get 401, browser navigations would be handled by the frontend
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "Not authenticated"},
+            )
+
+        # Sliding session: refresh cookie on each authenticated request
+        response = await call_next(request)
+        set_session_cookie(response, email)
+        return response
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from .tasks.scheduler import start_scheduler, shutdown_scheduler
@@ -54,6 +92,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="TrailerPark", version="0.1.0", lifespan=lifespan)
+
+# Auth middleware
+app.add_middleware(AuthMiddleware)
 
 # Look for frontend dist in multiple locations (local dev vs Docker)
 _src_dir = Path(__file__).resolve().parent

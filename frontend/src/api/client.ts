@@ -9,6 +9,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
   });
 
+  // Redirect to login on auth failure
+  if (response.status === 401) {
+    window.location.href = '/api/auth/login';
+    throw new Error('Not authenticated');
+  }
+
   if (!response.ok) {
     throw new Error(`API error: ${response.status} ${response.statusText}`);
   }

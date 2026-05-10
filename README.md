@@ -24,7 +24,7 @@ The easiest way to run TrailerPark — no local install needed.
 4. Go to **APIs & Services → Credentials**
 5. Click **Create Credentials → OAuth 2.0 Client ID**
 6. Application type: **Web application**
-7. Add an authorized redirect URI: `https://YOUR-APP.up.railway.app/api/auth/gmail/callback`
+7. Add an authorized redirect URI: `https://YOUR-APP.up.railway.app/api/auth/callback`
    (you'll get your Railway URL in step 2 — come back and update this)
 8. Copy the **Client ID** and **Client Secret**
 
@@ -40,13 +40,15 @@ The easiest way to run TrailerPark — no local install needed.
    - `GOOGLE_CLIENT_ID` — from step 1
    - `GOOGLE_CLIENT_SECRET` — from step 1
    - `GMAIL_QUERY` — e.g., `from:alex@truthtruckgroup.com`
+   - `ALLOWED_EMAIL` — the Gmail address allowed to log in (e.g., `alex@gmail.com`)
+   - `SESSION_SECRET` — generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`
    - `RAILWAY_RUN_UID` — set to `0` (fixes SQLite permissions on volumes)
 5. Railway will auto-build and deploy. Note your app URL (e.g., `https://trailerpark-production-xxxx.up.railway.app`)
-6. Go back to Google Cloud Console and add `https://YOUR-APP.up.railway.app/api/auth/gmail/callback` as an authorized redirect URI
+6. Go back to Google Cloud Console and add `https://YOUR-APP.up.railway.app/api/auth/callback` as an authorized redirect URI
 
-### 3. Connect Gmail
+### 3. Log in
 
-Visit `https://YOUR-APP.up.railway.app/api/auth/gmail/connect` in your browser. Sign in with the Gmail account that receives the forwarded broker emails. Done — the app will start syncing automatically.
+Visit your Railway URL. You'll be redirected to Google sign-in. Log in with the Gmail account that receives the forwarded broker emails. This both authenticates you and grants the app read access to Gmail. Email syncing starts automatically.
 
 **Cost**: ~$5-8/month on Railway's Hobby plan.
 
