@@ -1,6 +1,7 @@
 """Deals API endpoints."""
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -8,6 +9,19 @@ from ..models import Listing
 from ..schemas import ListingResponse, PaginatedResponse
 
 router = APIRouter(tags=["deals"])
+
+
+class RunResponse(BaseModel):
+    message: str
+
+
+@router.post("/deals/detect", response_model=RunResponse)
+def run_deal_detection(db: Session = Depends(get_db)):
+    """Manually trigger deal detection for all active listings."""
+    from ..services.deal_detector import detect_deals_all
+
+    deals_found = detect_deals_all(db)
+    return RunResponse(message=f"Deal detection complete: {deals_found} deal(s) found")
 
 
 @router.get("/deals", response_model=PaginatedResponse)

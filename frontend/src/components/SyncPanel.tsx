@@ -6,6 +6,10 @@ export default function SyncPanel() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
+  const [detectingDeals, setDetectingDeals] = useState(false);
+  const [dealResult, setDealResult] = useState<string | null>(null);
+  const [runningMatches, setRunningMatches] = useState(false);
+  const [matchResult, setMatchResult] = useState<string | null>(null);
 
   const loadStatus = async () => {
     try {
@@ -33,6 +37,32 @@ export default function SyncPanel() {
       setSyncResult('Sync failed');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleDetectDeals = async () => {
+    setDetectingDeals(true);
+    setDealResult(null);
+    try {
+      const result = await api.post<{ message: string }>('/deals/detect', {});
+      setDealResult(result.message);
+    } catch {
+      setDealResult('Deal detection failed');
+    } finally {
+      setDetectingDeals(false);
+    }
+  };
+
+  const handleRunMatches = async () => {
+    setRunningMatches(true);
+    setMatchResult(null);
+    try {
+      const result = await api.post<{ message: string }>('/matches/run', {});
+      setMatchResult(result.message);
+    } catch {
+      setMatchResult('Matching failed');
+    } finally {
+      setRunningMatches(false);
     }
   };
 
@@ -96,6 +126,30 @@ export default function SyncPanel() {
 
       {syncResult && (
         <p className="text-xs text-gray-600 mt-1.5 text-center">{syncResult}</p>
+      )}
+
+      <div className="flex gap-2 mt-2">
+        <button
+          onClick={handleDetectDeals}
+          disabled={detectingDeals}
+          className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {detectingDeals ? 'Running...' : 'Detect Deals'}
+        </button>
+        <button
+          onClick={handleRunMatches}
+          disabled={runningMatches}
+          className="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {runningMatches ? 'Running...' : 'Run Matching'}
+        </button>
+      </div>
+
+      {dealResult && (
+        <p className="text-xs text-gray-600 mt-1.5 text-center">{dealResult}</p>
+      )}
+      {matchResult && (
+        <p className="text-xs text-gray-600 mt-1.5 text-center">{matchResult}</p>
       )}
 
       {status.recent_emails.length > 0 && (

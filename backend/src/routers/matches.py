@@ -1,6 +1,7 @@
 """Matches API endpoints."""
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
@@ -8,6 +9,19 @@ from ..models import Match
 from ..schemas import MatchResponse, PaginatedResponse
 
 router = APIRouter(tags=["matches"])
+
+
+class RunResponse(BaseModel):
+    message: str
+
+
+@router.post("/matches/run", response_model=RunResponse)
+def run_matching(db: Session = Depends(get_db)):
+    """Manually trigger buyer-seller matching."""
+    from ..services.matcher import match_all
+
+    matches_found = match_all(db)
+    return RunResponse(message=f"Matching complete: {matches_found} match(es) found")
 
 
 @router.get("/matches", response_model=PaginatedResponse)
