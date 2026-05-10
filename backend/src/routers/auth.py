@@ -88,15 +88,25 @@ def login():
     redirect_uri = f"{settings.base_url}/api/auth/callback"
     flow = _build_flow(redirect_uri)
 
-    # Signed state token (no server-side storage needed)
-    state = _get_serializer().dumps({"purpose": "oauth"})
-
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         prompt="consent",
-        state=state,
         include_granted_scopes="true",
     )
+
+    # Include the PKCE code_verifier in the signed state token
+    state = _get_serializer().dumps({
+        "purpose": "oauth",
+        "cv": flow.code_verifier,
+    })
+
+    # Replace the state parameter in the URL
+    from urllib.parse import urlencode, urlparse, parse_qs, urlunparse
+    parsed = urlparse(auth_url)
+    params = parse_qs(parsed.query, keep_blank_values=True)
+    params["state"] = [state]
+    new_query = urlencode({k: v[0] for k, v in params.items()})
+    auth_url = urlunparse(parsed._replace(query=new_query))
 
     return RedirectResponse(auth_url)
 
@@ -124,9 +134,10 @@ def callback(
     except (BadSignature, SignatureExpired):
         raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
-    # Exchange code for tokens
+    # Exchange code for tokens (restore PKCE code_verifier from state)
     redirect_uri = f"{settings.base_url}/api/auth/callback"
     flow = _build_flow(redirect_uri)
+    flow.code_verifier = state_data.get("cv")
     flow.fetch_token(code=code)
     creds = flow.credentials
 
