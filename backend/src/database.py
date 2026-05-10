@@ -16,6 +16,10 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 
 
 _settings = get_settings()
+
+# Ensure the data directory exists
+_settings.database_path.parent.mkdir(parents=True, exist_ok=True)
+
 engine = create_engine(
     _settings.database_url_resolved,
     connect_args={"check_same_thread": False},

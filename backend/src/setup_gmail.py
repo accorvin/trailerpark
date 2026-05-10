@@ -1,12 +1,14 @@
-"""One-time Gmail OAuth setup.
+"""One-time Gmail OAuth setup (local/CLI).
+
+For headless deployments (Railway, VPS), use the web-based flow at
+/api/auth/gmail/connect instead.
 
 Usage:
     uv run python -m src.setup_gmail
 """
 
-import json
+import os
 import sys
-from pathlib import Path
 
 from google_auth_oauthlib.flow import InstalledAppFlow
 
@@ -51,8 +53,10 @@ def main():
 
     token_path.parent.mkdir(parents=True, exist_ok=True)
     token_path.write_text(creds.to_json())
-    # Restrict file permissions (owner read/write only)
-    token_path.chmod(0o600)
+
+    # Restrict file permissions on Unix
+    if os.name != "nt":
+        token_path.chmod(0o600)
 
     print(f"\nGmail authenticated successfully!")
     print(f"Token saved to: {token_path}")

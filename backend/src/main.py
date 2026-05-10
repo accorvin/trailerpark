@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -54,8 +55,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="TrailerPark", version="0.1.0", lifespan=lifespan)
 
+# Look for frontend dist in multiple locations (local dev vs Docker)
+_src_dir = Path(__file__).resolve().parent
+frontend_dist = _src_dir.parent.parent / "frontend" / "dist"  # local: backend/../frontend/dist
+if not frontend_dist.exists():
+    frontend_dist = _src_dir.parent / "frontend" / "dist"  # Docker: /app/frontend/dist
+
 # CORS only in development (when frontend dist doesn't exist, Vite dev server is on a different port)
-frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 if not frontend_dist.exists():
     app.add_middleware(
         CORSMiddleware,
@@ -66,7 +72,7 @@ if not frontend_dist.exists():
     )
 
 # Import and register routers
-from .routers import listings, buyers, deals, matches, benchmarks, emails, stats, attachments  # noqa: E402
+from .routers import listings, buyers, deals, matches, benchmarks, emails, stats, attachments, auth  # noqa: E402
 
 app.include_router(listings.router, prefix="/api")
 app.include_router(buyers.router, prefix="/api")
@@ -76,6 +82,7 @@ app.include_router(benchmarks.router, prefix="/api")
 app.include_router(emails.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(attachments.router, prefix="/api")
+app.include_router(auth.router, prefix="/api")
 
 # Serve frontend static files in production
 if frontend_dist.exists():

@@ -12,17 +12,55 @@ A local deal aggregator for commercial truck and trailer brokers. Ingests emails
 - **Auto-Archiving**: Listings older than 20 days are automatically archived
 - **De-duplication**: Detects and merges duplicate listings from different sellers
 
-## Prerequisites
+## Deploy to Railway (Recommended)
+
+The easiest way to run TrailerPark — no local install needed.
+
+### 1. Google Cloud setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project, enable the **Gmail API**
+3. Configure the **OAuth consent screen** (External, add your Gmail as a test user)
+4. Go to **APIs & Services → Credentials**
+5. Click **Create Credentials → OAuth 2.0 Client ID**
+6. Application type: **Web application**
+7. Add an authorized redirect URI: `https://YOUR-APP.up.railway.app/api/auth/gmail/callback`
+   (you'll get your Railway URL in step 2 — come back and update this)
+8. Copy the **Client ID** and **Client Secret**
+
+**Important**: Go to **OAuth consent screen → Publish App** to prevent refresh tokens from expiring after 7 days. The "unverified app" warning during sign-in is fine for personal use.
+
+### 2. Deploy on Railway
+
+1. Create a [Railway](https://railway.app) account
+2. Click **New Project → Deploy from GitHub Repo** and select this repo
+3. Add a **Volume** mounted at `/app/data`
+4. Set these **environment variables** in the Railway dashboard:
+   - `OPENAI_API_KEY` — your OpenAI API key
+   - `GOOGLE_CLIENT_ID` — from step 1
+   - `GOOGLE_CLIENT_SECRET` — from step 1
+   - `GMAIL_QUERY` — e.g., `from:alex@truthtruckgroup.com`
+   - `RAILWAY_RUN_UID` — set to `0` (fixes SQLite permissions on volumes)
+5. Railway will auto-build and deploy. Note your app URL (e.g., `https://trailerpark-production-xxxx.up.railway.app`)
+6. Go back to Google Cloud Console and add `https://YOUR-APP.up.railway.app/api/auth/gmail/callback` as an authorized redirect URI
+
+### 3. Connect Gmail
+
+Visit `https://YOUR-APP.up.railway.app/api/auth/gmail/connect` in your browser. Sign in with the Gmail account that receives the forwarded broker emails. Done — the app will start syncing automatically.
+
+**Cost**: ~$5-8/month on Railway's Hobby plan.
+
+---
+
+## Local Development
+
+### Prerequisites
 
 - Python 3.12+
 - Node.js 18+
 - [uv](https://docs.astral.sh/uv/) (Python package manager)
-- OpenAI API key
-- Google Cloud project with Gmail API enabled
 
-## Quick Start
-
-### 1. Clone and configure
+### Setup
 
 ```bash
 git clone https://github.com/accorvin/trailerpark.git
@@ -31,57 +69,25 @@ cp backend/.env.example backend/.env
 # Edit backend/.env — set OPENAI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
 ```
 
-### 2. Google Cloud setup
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project (or select an existing one)
-3. Enable the **Gmail API** (APIs & Services → Library → search "Gmail API")
-4. Go to **APIs & Services → Credentials**
-5. Click **Create Credentials → OAuth 2.0 Client ID**
-6. Application type: **Desktop app**
-7. Copy the **Client ID** and **Client Secret** into your `.env` file
-
-**Important**: By default, Google OAuth apps are in "Testing" mode and refresh tokens expire after 7 days. To avoid this, go to the **OAuth consent screen** and publish the app. You'll see an "unverified app" warning during sign-in, which is fine for personal use.
-
-### 3. Install dependencies
+For local dev, create a **Desktop app** OAuth client in Google Cloud Console (no redirect URI needed).
 
 ```bash
-cd backend && uv sync && uv sync --extra dev
+# Install dependencies
+cd backend && uv sync --extra dev
 cd ../frontend && npm install
-```
 
-### 4. Set up the database
+# Set up the database
+cd ../backend && uv run alembic -c alembic/alembic.ini upgrade head
 
-```bash
-cd backend && uv run alembic -c alembic/alembic.ini upgrade head
-```
+# Authenticate with Gmail (opens browser)
+uv run python -m src.setup_gmail
 
-### 5. Authenticate with Gmail
+# Run backend and frontend separately for hot-reload
+# Terminal 1:
+uv run uvicorn src.main:app --reload --port 8000
 
-```bash
-cd backend && uv run python -m src.setup_gmail
-```
-
-This opens a browser window for one-time OAuth consent. The token is saved locally at `backend/data/gmail_token.json`.
-
-### 6. Run
-
-```bash
-cd backend && uv run uvicorn src.main:app --host 0.0.0.0 --port 8000
-```
-
-Open http://localhost:8000 (API docs at http://localhost:8000/docs)
-
-### Development mode
-
-Run backend and frontend separately for hot-reload:
-
-```bash
-# Terminal 1: Backend
-cd backend && uv run uvicorn src.main:app --reload --port 8000
-
-# Terminal 2: Frontend
-cd frontend && npm run dev
+# Terminal 2:
+cd ../frontend && npm run dev
 ```
 
 Frontend dev server runs on http://localhost:5173 with API proxy to port 8000.
@@ -92,40 +98,33 @@ Frontend dev server runs on http://localhost:5173 with API proxy to port 8000.
 cd backend && uv run python -m src.seed
 ```
 
+### Running tests
+
+```bash
+cd backend
+uv run pytest                          # All tests
+uv run pytest -x -v                    # Stop on first failure, verbose
+```
+
 ## Gmail Setup
 
-The app connects directly to Gmail using OAuth. Set up a forwarding rule or filter in Gmail to label relevant broker emails, then configure `GMAIL_QUERY` in `.env` to target that label:
+Set up email forwarding from the broker's work email to a Gmail account. Then configure `GMAIL_QUERY` to filter:
 
 ```env
-GMAIL_QUERY=label:TrailerPark
+GMAIL_QUERY=from:alex@truthtruckgroup.com
 ```
 
 By default, the app scans `label:inbox`. On the first sync, it looks back 30 days (configurable via `GMAIL_INITIAL_SYNC_DAYS`).
 
 Use the **Sync Now** button in the dashboard or `POST /api/emails/sync` to trigger an immediate sync.
 
-## Running Tests
-
-```bash
-cd backend
-uv run pytest                          # All tests
-uv run pytest -x -v                    # Stop on first failure, verbose
-uv run pytest tests/test_llm_parser.py # Specific test file
-```
-
 ## Database Backup & Restore
 
-Daily backups are saved to `backend/data/backups/` (7-day rolling).
-
-To restore from a backup:
-```bash
-cp backend/data/backups/trailerpark-YYYY-MM-DD.db backend/data/trailerpark.db
-# Restart the app
-```
+Daily backups are saved to `data/backups/` (7-day rolling).
 
 ## Configuration
 
-All settings are in `backend/.env`. See `backend/.env.example` for available options.
+All settings are configured via environment variables (or `backend/.env` for local dev). See `backend/.env.example` for the full list.
 
 Key settings:
 - `OPENAI_API_KEY` — OpenAI API key (required)

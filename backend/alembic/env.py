@@ -9,6 +9,7 @@ import sys
 # Add backend directory to path so we can import src
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from src.config import get_settings
 from src.database import Base
 from src.models import Email, Listing, BuyerRequest, PriceBenchmark, Attachment, Match, GmailSyncState  # noqa: F401
 
@@ -17,6 +18,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+settings = get_settings()
 
 
 def _set_sqlite_pragmas(dbapi_conn, connection_record):
@@ -27,20 +30,16 @@ def _set_sqlite_pragmas(dbapi_conn, connection_record):
 
 
 def run_migrations_offline():
-    url = config.get_main_option("sqlalchemy.url")
+    url = settings.database_url_resolved
     context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online():
-    # Resolve relative DB path from project root
-    url = config.get_main_option("sqlalchemy.url")
-    if url and url.startswith("sqlite:///") and not url.startswith("sqlite:////"):
-        rel = url[len("sqlite:///"):]
-        abs_path = (Path(__file__).resolve().parent.parent / rel).resolve()
-        abs_path.parent.mkdir(parents=True, exist_ok=True)
-        url = f"sqlite:///{abs_path}"
+    url = settings.database_url_resolved
+    db_path = settings.database_path
+    db_path.parent.mkdir(parents=True, exist_ok=True)
 
     connectable = create_engine(url)
     event.listen(connectable, "connect", _set_sqlite_pragmas)
