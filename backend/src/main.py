@@ -48,6 +48,7 @@ PUBLIC_PATH_PREFIXES = (
     "/api/auth/login",
     "/api/auth/callback",
     "/api/auth/status",
+    "/api/health",
     "/docs",
     "/openapi.json",
     "/redoc",
@@ -111,6 +112,11 @@ if not frontend_dist.exists():
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
 
 # Import and register routers
 from .routers import listings, buyers, deals, matches, benchmarks, emails, stats, attachments, auth  # noqa: E402
