@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import StatsBar from './StatsBar';
+import SyncPanel from './SyncPanel';
 
 const navItems = [
   { to: '/', label: 'Deals' },
@@ -38,6 +39,7 @@ export default function Layout() {
             </li>
           ))}
         </ul>
+        <SyncPanel />
       </nav>
 
       {/* Main content */}

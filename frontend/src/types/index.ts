@@ -106,6 +106,24 @@ export interface Stats {
   attachment_storage_bytes: number;
 }
 
+export interface SyncStatus {
+  gmail_connected: boolean;
+  last_sync_at: string | null;
+  last_sync_status: string | null;
+  last_sync_error: string | null;
+  total_emails: number;
+  seller_listings: number;
+  buyer_requests: number;
+  irrelevant: number;
+  parse_errors: number;
+  recent_emails: Email[];
+}
+
+export interface SyncResponse {
+  processed: number;
+  message: string;
+}
+
 export interface PaginatedResponse<T> {
   items: T[];
   total: number;
