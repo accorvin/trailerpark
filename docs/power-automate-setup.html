@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TrailerPark - Power Automate Setup Guide</title>
+<style>
+  body { font-family: -apple-system, 'Segoe UI', Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #333; line-height: 1.6; }
+  h1 { color: #1a1a2e; border-bottom: 3px solid #e94560; padding-bottom: 10px; }
+  h2 { color: #1a1a2e; margin-top: 35px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+  h3 { color: #16213e; margin-top: 25px; }
+  code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #f5f5f5; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 0.85em; border: 1px solid #ddd; }
+  .step { background: #f8f9fa; border-left: 4px solid #e94560; padding: 15px 20px; margin: 20px 0; border-radius: 0 5px 5px 0; }
+  .step h3 { margin-top: 0; color: #e94560; }
+  .note { background: #fff3cd; border: 1px solid #ffc107; padding: 12px 15px; border-radius: 5px; margin: 15px 0; }
+  .note strong { color: #856404; }
+  .warning { background: #f8d7da; border: 1px solid #f5c6cb; padding: 12px 15px; border-radius: 5px; margin: 15px 0; }
+  .warning strong { color: #721c24; }
+  .success { background: #d4edda; border: 1px solid #c3e6cb; padding: 12px 15px; border-radius: 5px; margin: 15px 0; }
+  .success strong { color: #155724; }
+  ol li, ul li { margin-bottom: 8px; }
+  table { border-collapse: collapse; width: 100%; margin: 15px 0; }
+  th, td { border: 1px solid #ddd; padding: 8px 12px; text-align: left; }
+  th { background: #f0f0f0; }
+  .header-info { color: #666; font-size: 0.9em; margin-top: -10px; }
+  @media print { body { margin: 20px; } .step { break-inside: avoid; } }
+</style>
+</head>
+<body>
+
+<h1>TrailerPark - Power Automate Setup Guide</h1>
+<p class="header-info">One-time setup to automatically save incoming emails to OneDrive for the TrailerPark app.</p>
+
+<h2>What This Does</h2>
+<p>This sets up an automatic flow that:</p>
+<ol>
+  <li>Watches for new emails arriving in your Outlook inbox</li>
+  <li>Saves each email's details (sender, subject, body) as a <code>metadata.json</code> file in OneDrive</li>
+  <li>Saves any email attachments (PDFs, Excel files, images) alongside it</li>
+  <li>Skips signature images (logos, social icons) automatically</li>
+  <li>OneDrive syncs everything to your local computer, where the TrailerPark app picks it up</li>
+</ol>
+
+<div class="success">
+  <strong>No extra cost:</strong> All connectors used are standard and included with your M365 Business plan. No premium Power Automate license is needed.
+</div>
+
+<h2>Prerequisites</h2>
+<ul>
+  <li>Access to <a href="https://make.powerautomate.com">make.powerautomate.com</a> with your M365 account</li>
+  <li>OneDrive desktop sync app running on the office computer</li>
+</ul>
+
+<h2>Setup Steps</h2>
+
+<div class="step">
+<h3>Step 1: Create a New Flow</h3>
+<ol>
+  <li>Go to <a href="https://make.powerautomate.com">make.powerautomate.com</a> and sign in</li>
+  <li>Click <strong>My flows</strong> in the left sidebar</li>
+  <li>Click <strong>+ New flow</strong> &rarr; <strong>Automated cloud flow</strong></li>
+  <li>Name it: <code>TrailerPark - Save Emails to OneDrive</code></li>
+  <li>In "Choose your flow's trigger", search for and select <strong>"When a new email arrives (V3)"</strong> (Office 365 Outlook)</li>
+  <li>Click <strong>Create</strong></li>
+</ol>
+</div>
+
+<div class="step">
+<h3>Step 2: Configure the Email Trigger</h3>
+<p>In the trigger settings that appear:</p>
+<ol>
+  <li><strong>Folder</strong>: Select <code>Inbox</code> (or whichever folder to monitor)</li>
+  <li><strong>Include Attachments</strong>: Set to <strong>Yes</strong></li>
+  <li><strong>Only with Attachments</strong>: Set to <strong>No</strong> (we want all emails, not just ones with attachments)</li>
+  <li>Leave all other fields at their defaults</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>Step 3: Add "Html to text" Conversion</h3>
+<p>The email trigger only provides the body in HTML format. We need plain text for the app to parse reliably.</p>
+<ol>
+  <li>Click <strong>+ New step</strong></li>
+  <li>Search for <strong>"Html to text"</strong> (it's under "Content Conversion")</li>
+  <li>In the <strong>Content</strong> field, click inside it and select the dynamic value: <strong>Body</strong> (from the email trigger)</li>
+</ol>
+<div class="note">
+  <strong>Why not use bodyPreview?</strong> The <code>bodyPreview</code> field is truncated to 255 characters, which is too short for most emails. The Html-to-text conversion gives us the full plain text body.
+</div>
+</div>
+
+<div class="step">
+<h3>Step 4: Compose the Metadata JSON</h3>
+<p>This step builds a JSON file with all the email details the app needs.</p>
+<ol>
+  <li>Click <strong>+ New step</strong></li>
+  <li>Search for <strong>"Compose"</strong> (under Data Operations)</li>
+  <li>In the <strong>Inputs</strong> field, build the following JSON. Use the <strong>Dynamic content</strong> panel to insert the blue tokens for each field:</li>
+</ol>
+<pre>{
+  "from_address": "<em>[Dynamic: From]</em>",
+  "from_name": "<em>[Dynamic: From]</em>",
+  "subject": "<em>[Dynamic: Subject]</em>",
+  "received_at": "<em>[Dynamic: Received Time]</em>",
+  "body_text": "<em>[Dynamic: output from Html to text step]</em>",
+  "body_html": "<em>[Dynamic: Body]</em>"
+}</pre>
+<div class="note">
+  <strong>Tip:</strong> Click inside the Inputs field, type the opening <code>{</code>, then type each key (like <code>"from_address": </code>) and click the corresponding blue dynamic content token to insert the value. The tokens will appear as blue pills in the field.
+</div>
+</div>
+
+<div class="step">
+<h3>Step 5: Save metadata.json to OneDrive</h3>
+<p>This creates the metadata file in a structured folder in OneDrive.</p>
+<ol>
+  <li>Click <strong>+ New step</strong></li>
+  <li>Search for <strong>"Create file"</strong> (OneDrive for Business)</li>
+  <li><strong>Folder Path</strong>: Click the folder icon and type the following expression. You'll need to use the <strong>Expression</strong> tab for the <code>formatDateTime</code> parts:
+    <pre>/TrailerPark/@{formatDateTime(triggerOutputs()?['body/receivedDateTime'], 'yyyy-MM')}/@{formatDateTime(triggerOutputs()?['body/receivedDateTime'], 'yyyy-MM-ddTHH-mm-ss')}</pre>
+    <p>This creates paths like: <code>/TrailerPark/2026-05/2026-05-09T08-30-00/</code></p>
+  </li>
+  <li><strong>File Name</strong>: <code>metadata.json</code></li>
+  <li><strong>File Content</strong>: Select the <strong>Output</strong> from the Compose step (Step 4)</li>
+</ol>
+<div class="note">
+  <strong>How folder paths work:</strong> The monthly folder (e.g., <code>2026-05</code>) groups emails by month. The timestamp folder (e.g., <code>2026-05-09T08-30-00</code>) is unique per email. Folders are created automatically when the file is saved &mdash; you don't need to create them manually. We use timestamp-only names (no email subject) to avoid issues with special characters in file paths.
+</div>
+</div>
+
+<div class="step">
+<h3>Step 6: Save Attachments (Skip Signature Images)</h3>
+<ol>
+  <li>Click <strong>+ New step</strong></li>
+  <li>Search for <strong>"Apply to each"</strong> (under Control)</li>
+  <li>In <strong>"Select an output from previous steps"</strong>, choose <strong>Attachments</strong> (from the email trigger)</li>
+  <li>Inside the Apply to each loop, click <strong>Add an action</strong> &rarr; search for <strong>"Condition"</strong> (Control)</li>
+  <li>Set the condition:
+    <ul>
+      <li>Left side: click Dynamic content &rarr; select <strong>Is Inline</strong> (from the attachment)</li>
+      <li>Operator: <strong>is equal to</strong></li>
+      <li>Right side: type <code>false</code></li>
+    </ul>
+  </li>
+  <li>In the <strong>"If yes"</strong> branch (attachment is NOT inline), add <strong>"Create file"</strong> (OneDrive for Business):
+    <ul>
+      <li><strong>Folder Path</strong>: Same expression as Step 5:
+        <pre>/TrailerPark/@{formatDateTime(triggerOutputs()?['body/receivedDateTime'], 'yyyy-MM')}/@{formatDateTime(triggerOutputs()?['body/receivedDateTime'], 'yyyy-MM-ddTHH-mm-ss')}</pre>
+      </li>
+      <li><strong>File Name</strong>: Select <strong>Name</strong> (from the current attachment)</li>
+      <li><strong>File Content</strong>: Select <strong>Content Bytes</strong> (from the current attachment)</li>
+    </ul>
+  </li>
+  <li>Leave the <strong>"If no"</strong> branch empty (this skips inline signature images)</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>Step 7: Save and Test</h3>
+<ol>
+  <li>Click <strong>Save</strong> in the top-right corner</li>
+  <li>Send a test email to the inbox (include a PDF or image attachment for a full test)</li>
+  <li>Wait 1-2 minutes for the flow to trigger</li>
+  <li>Check OneDrive (online at onedrive.com or in File Explorer): you should see a new folder at <code>TrailerPark/2026-05/2026-05-09Txx-xx-xx/</code></li>
+  <li>Open the folder &mdash; verify <code>metadata.json</code> is there and contains the email details</li>
+  <li>Verify any attachments are saved alongside it</li>
+</ol>
+</div>
+
+<div class="step">
+<h3>Step 8: Confirm Local Sync</h3>
+<p>Make sure the OneDrive desktop app is syncing the TrailerPark folder to the office computer.</p>
+<ol>
+  <li>On the office computer, click the <strong>OneDrive icon</strong> in the system tray (bottom-right)</li>
+  <li>Go to <strong>Settings</strong> &rarr; <strong>Account</strong> &rarr; <strong>Choose folders</strong></li>
+  <li>Make sure the <strong>TrailerPark</strong> folder is checked for sync</li>
+  <li>Note the local path where it syncs to (usually something like):
+    <pre>C:\Users\YourName\OneDrive - Truth Truck Group\TrailerPark</pre>
+  </li>
+  <li>This path is what goes into the TrailerPark app's settings as <code>EMAIL_DIR</code></li>
+</ol>
+</div>
+
+<h2>What the Result Looks Like</h2>
+<p>After the flow is running, your local OneDrive folder will look like this:</p>
+<pre>
+C:\Users\broker\OneDrive - Truth Truck Group\TrailerPark\
+    2026-05\
+        2026-05-09T08-30-00\
+            metadata.json
+            inventory.pdf
+            photo1.jpg
+        2026-05-09T09-15-00\
+            metadata.json
+            specs.xlsx
+        2026-05-09T10-45-00\
+            metadata.json
+    2026-06\
+        2026-06-01T07-00-00\
+            metadata.json
+            listings.pdf
+        ...
+</pre>
+
+<h2>Troubleshooting</h2>
+
+<table>
+  <tr><th>Problem</th><th>Solution</th></tr>
+  <tr>
+    <td>Flow doesn't trigger on new emails</td>
+    <td>Go to <strong>My flows</strong> &rarr; click the flow &rarr; check <strong>Run history</strong>. Make sure the trigger folder matches your inbox. Try turning the flow off and back on.</td>
+  </tr>
+  <tr>
+    <td>Folder not appearing on local computer</td>
+    <td>Check OneDrive sync status (cloud icon in system tray). Make sure the TrailerPark folder is selected for sync. Right-click the OneDrive icon and choose "Sync now".</td>
+  </tr>
+  <tr>
+    <td>Two emails arrive at the exact same second</td>
+    <td>Rare at 40-100 emails/day. If it happens, the second folder creation will fail. Fix by adding <code>_@{rand(1000,9999)}</code> to the end of the folder name expression in Steps 5 and 6.</td>
+  </tr>
+  <tr>
+    <td>Large attachments fail to save</td>
+    <td>OneDrive has a 100 MB file size limit per action. Attachments larger than this will fail. This is extremely rare for email attachments.</td>
+  </tr>
+  <tr>
+    <td>Flow shows errors in run history</td>
+    <td>Click the failed run to see which step failed and the error message. Common issues: expired M365 session (re-authenticate the connections), OneDrive storage full.</td>
+  </tr>
+</table>
+
+<div class="warning">
+  <strong>Important:</strong> The TrailerPark folder must stay synced on the office computer for the app to work. If OneDrive sync is paused or the folder is unselected, the app won't see new emails.
+</div>
+
+<h2>Once It's Working</h2>
+<p>After confirming the flow works and files are syncing locally:</p>
+<ol>
+  <li>Let it run for a day to accumulate some real email data</li>
+  <li>Note the local folder path (the <code>EMAIL_DIR</code> for the app)</li>
+  <li>The TrailerPark app will be configured to scan this folder and process the emails automatically</li>
+</ol>
+
+<p style="color: #999; margin-top: 40px; font-size: 0.85em;">TrailerPark - Power Automate Setup Guide | Generated May 2026</p>
+
+</body>
+</html>

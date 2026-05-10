@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Environment
+.env
+backend/.env
+
+# SQLite database
+backend/data/trailerpark.db
+backend/data/trailerpark.db-wal
+backend/data/trailerpark.db-shm
+
+# Attachments and runtime data
+backend/data/attachments/
+backend/data/logs/
+backend/data/backups/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
