@@ -7,7 +7,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 class Settings(BaseSettings):
     model_config = {"env_file": PROJECT_ROOT / ".env", "env_file_encoding": "utf-8"}
 
-    EMAIL_DIR: str
     OPENAI_API_KEY: str
     DATABASE_URL: str = "sqlite:///data/trailerpark.db"
     SCAN_INTERVAL_MINUTES: int = 5
@@ -20,9 +19,15 @@ class Settings(BaseSettings):
     BACKUP_DIR: str = "data/backups"
     OPENAI_MAX_CONCURRENT: int = 5
 
+    # Gmail OAuth
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GMAIL_QUERY: str = "label:inbox"
+    GMAIL_INITIAL_SYNC_DAYS: int = 30
+
     @property
-    def email_dir_path(self) -> Path:
-        return Path(self.EMAIL_DIR)
+    def data_dir_path(self) -> Path:
+        return (PROJECT_ROOT / "data").resolve()
 
     @property
     def database_path(self) -> Path:

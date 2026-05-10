@@ -10,7 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.database import Base
-from src.models import Email, Listing, BuyerRequest, PriceBenchmark, Attachment, Match  # noqa: F401
+from src.models import Email, Listing, BuyerRequest, PriceBenchmark, Attachment, Match, GmailSyncState  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

@@ -1,9 +1,7 @@
-"""Test fixtures: test DB, mock OpenAI, sample email dirs."""
+"""Test fixtures: test DB, mock OpenAI, sample data."""
 
-import json
 import os
 from datetime import datetime
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -12,7 +10,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 # Set required env vars before importing app code
-os.environ.setdefault("EMAIL_DIR", "/tmp/trailerpark-test-emails")
 os.environ.setdefault("OPENAI_API_KEY", "test-key")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
@@ -101,7 +98,7 @@ def client(db_engine):
 @pytest.fixture
 def sample_email(db):
     email = Email(
-        id="2026-05/2026-05-01T09-00-00",
+        id="test-msg-001",
         from_address="seller@test.com",
         from_name="Test Seller",
         subject="2022 Freightliner Cascadia",
@@ -139,7 +136,7 @@ def sample_listing(db, sample_email):
 @pytest.fixture
 def sample_buyer(db):
     email = Email(
-        id="2026-05/2026-05-02T10-00-00",
+        id="test-msg-002",
         from_address="buyer@test.com",
         from_name="Test Buyer",
         subject="Looking for Cascadia",
@@ -185,26 +182,3 @@ def sample_benchmark(db):
     db.commit()
     db.refresh(benchmark)
     return benchmark
-
-
-@pytest.fixture
-def sample_email_dir(tmp_path):
-    """Create a sample email directory structure for testing."""
-    month_dir = tmp_path / "2026-05"
-    month_dir.mkdir()
-
-    email_dir = month_dir / "2026-05-09T08-30-00"
-    email_dir.mkdir()
-
-    metadata = {
-        "from_address": "seller@example.com",
-        "from_name": "Example Seller",
-        "subject": "2023 Peterbilt 579 For Sale",
-        "received_at": "2026-05-09T08:30:00Z",
-        "body_text": "2023 Peterbilt 579, 200k miles, Cummins X15, $85,000. Houston, TX.",
-        "body_html": "<p>2023 Peterbilt 579, 200k miles, Cummins X15, $85,000. Houston, TX.</p>",
-    }
-
-    (email_dir / "metadata.json").write_text(json.dumps(metadata))
-
-    return tmp_path

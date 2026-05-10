@@ -20,7 +20,7 @@ from .database import Base
 class Email(Base):
     __tablename__ = "emails"
 
-    id = Column(String, primary_key=True)  # relative folder path e.g. "2026-05/2026-05-09T08-30-00"
+    id = Column(String, primary_key=True)  # Gmail message ID
     from_address = Column(String, nullable=True)
     from_name = Column(String, nullable=True)
     subject = Column(String, nullable=True)
@@ -135,3 +135,13 @@ class Match(Base):
 
     buyer_request = relationship("BuyerRequest", back_populates="matches")
     listing = relationship("Listing", back_populates="matches")
+
+
+class GmailSyncState(Base):
+    __tablename__ = "gmail_sync_state"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    last_history_id = Column(String, nullable=True)
+    last_sync_at = Column(DateTime, nullable=True)
+    last_sync_status = Column(String, nullable=True)  # "ok" or "error"
+    last_sync_error = Column(Text, nullable=True)

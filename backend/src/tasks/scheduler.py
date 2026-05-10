@@ -6,6 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from ..config import get_settings
 from ..database import SessionLocal
+from ..services.gmail_client import is_gmail_configured
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -15,6 +16,9 @@ scheduler = BackgroundScheduler()
 
 def _run_email_scan():
     """Scan for new emails."""
+    if not is_gmail_configured():
+        return
+
     from ..services.email_ingestion import scan_emails
 
     db = SessionLocal()
@@ -141,9 +145,12 @@ def start_scheduler():
     scheduler.start()
     logger.info("Scheduler started with %d jobs", len(scheduler.get_jobs()))
 
-    # Run initial scan on startup
-    logger.info("Running initial email scan...")
-    _run_email_scan()
+    # Run initial scan on startup (only if Gmail is configured)
+    if is_gmail_configured():
+        logger.info("Running initial email scan...")
+        _run_email_scan()
+    else:
+        logger.info("Gmail not configured — skipping initial scan. Run: uv run python -m src.setup_gmail")
 
 
 def shutdown_scheduler():

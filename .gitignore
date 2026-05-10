@@ -25,6 +25,9 @@ backend/data/attachments/
 backend/data/logs/
 backend/data/backups/
 
+# Gmail OAuth token
+backend/data/gmail_token.json
+
 # IDE
 .idea/
 .vscode/
