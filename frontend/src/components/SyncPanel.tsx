@@ -2,14 +2,19 @@ import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import type { SyncStatus, SyncResponse } from '../types';
 
+type ModalState = {
+  open: boolean;
+  title: string;
+  status: 'running' | 'success' | 'error';
+  message: string;
+};
+
 export default function SyncPanel() {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<string | null>(null);
   const [detectingDeals, setDetectingDeals] = useState(false);
-  const [dealResult, setDealResult] = useState<string | null>(null);
   const [runningMatches, setRunningMatches] = useState(false);
-  const [matchResult, setMatchResult] = useState<string | null>(null);
+  const [modal, setModal] = useState<ModalState>({ open: false, title: '', status: 'running', message: '' });
 
   const loadStatus = async () => {
     try {
@@ -28,13 +33,13 @@ export default function SyncPanel() {
 
   const handleSync = async () => {
     setSyncing(true);
-    setSyncResult(null);
+    setModal({ open: true, title: 'Email Sync', status: 'running', message: 'Fetching new emails from Gmail...' });
     try {
       const result = await api.post<SyncResponse>('/emails/sync', {});
-      setSyncResult(result.message);
+      setModal({ open: true, title: 'Email Sync', status: 'success', message: result.message });
       await loadStatus();
     } catch {
-      setSyncResult('Sync failed');
+      setModal({ open: true, title: 'Email Sync', status: 'error', message: 'Sync failed. Check your Gmail connection.' });
     } finally {
       setSyncing(false);
     }
@@ -42,12 +47,12 @@ export default function SyncPanel() {
 
   const handleDetectDeals = async () => {
     setDetectingDeals(true);
-    setDealResult(null);
+    setModal({ open: true, title: 'Deal Detection', status: 'running', message: 'Scanning listings against benchmarks...' });
     try {
       const result = await api.post<{ message: string }>('/deals/detect', {});
-      setDealResult(result.message);
+      setModal({ open: true, title: 'Deal Detection', status: 'success', message: result.message });
     } catch {
-      setDealResult('Deal detection failed');
+      setModal({ open: true, title: 'Deal Detection', status: 'error', message: 'Deal detection failed.' });
     } finally {
       setDetectingDeals(false);
     }
@@ -55,12 +60,12 @@ export default function SyncPanel() {
 
   const handleRunMatches = async () => {
     setRunningMatches(true);
-    setMatchResult(null);
+    setModal({ open: true, title: 'Buyer-Seller Matching', status: 'running', message: 'Matching buyers to listings...' });
     try {
       const result = await api.post<{ message: string }>('/matches/run', {});
-      setMatchResult(result.message);
+      setModal({ open: true, title: 'Buyer-Seller Matching', status: 'success', message: result.message });
     } catch {
-      setMatchResult('Matching failed');
+      setModal({ open: true, title: 'Buyer-Seller Matching', status: 'error', message: 'Matching failed.' });
     } finally {
       setRunningMatches(false);
     }
@@ -124,10 +129,6 @@ export default function SyncPanel() {
         {syncing ? 'Syncing...' : 'Sync Now'}
       </button>
 
-      {syncResult && (
-        <p className="text-xs text-gray-600 mt-1.5 text-center">{syncResult}</p>
-      )}
-
       <div className="flex gap-2 mt-2">
         <button
           onClick={handleDetectDeals}
@@ -144,13 +145,6 @@ export default function SyncPanel() {
           {runningMatches ? 'Running...' : 'Run Matching'}
         </button>
       </div>
-
-      {dealResult && (
-        <p className="text-xs text-gray-600 mt-1.5 text-center">{dealResult}</p>
-      )}
-      {matchResult && (
-        <p className="text-xs text-gray-600 mt-1.5 text-center">{matchResult}</p>
-      )}
 
       {status.recent_emails.length > 0 && (
         <div className="mt-3">
@@ -175,6 +169,46 @@ export default function SyncPanel() {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+      {modal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => modal.status !== 'running' && setModal(m => ({ ...m, open: false }))}>
+          <div className="bg-white rounded-lg shadow-xl w-80 p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold text-gray-900 mb-4">{modal.title}</h3>
+
+            <div className="flex items-center gap-3 mb-4">
+              {modal.status === 'running' && (
+                <svg className="animate-spin h-5 w-5 text-blue-600 shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              )}
+              {modal.status === 'success' && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-600 shrink-0">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </span>
+              )}
+              {modal.status === 'error' && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 shrink-0">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </span>
+              )}
+              <p className="text-sm text-gray-700">{modal.message}</p>
+            </div>
+
+            {modal.status !== 'running' && (
+              <button
+                onClick={() => setModal(m => ({ ...m, open: false }))}
+                className="w-full px-3 py-1.5 text-xs font-medium rounded bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+              >
+                Close
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
