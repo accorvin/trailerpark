@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.config import get_settings
 from src.database import Base
-from src.models import Email, Listing, BuyerRequest, PriceBenchmark, Attachment, Match, GmailSyncState  # noqa: F401
+from src.models import Email, Listing, BuyerRequest, PriceBenchmark, Attachment, Match, GmailSyncState, GlossaryEntry, FieldCorrection  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
@@ -45,7 +45,7 @@ def run_migrations_online():
     event.listen(connectable, "connect", _set_sqlite_pragmas)
 
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
         with context.begin_transaction():
             context.run_migrations()
 

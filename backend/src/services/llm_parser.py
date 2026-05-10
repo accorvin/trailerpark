@@ -11,7 +11,7 @@ from ..config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-client = OpenAI(api_key=settings.OPENAI_API_KEY)
+client = OpenAI(api_key=settings.OPENAI_API_KEY, max_retries=5)
 
 # --- Classification Prompt (GPT-4o-mini) ---
 
@@ -46,7 +46,16 @@ For EACH vehicle listed, extract:
 - description: brief description of the vehicle
 
 If one email lists multiple vehicles, return one object per vehicle.
-If a field is not mentioned, use null."""
+If a field is not mentioned, use null.
+
+For each field you extract, also provide the original text snippet from the email
+in the "source_mappings" array. Each entry should have the field name, the verbatim
+snippet from the email where you found that information, and the index of the listing
+it belongs to (0-based)."""
+
+_NULLABLE_STRING = {"anyOf": [{"type": "string"}, {"type": "null"}]}
+_NULLABLE_INT = {"anyOf": [{"type": "integer"}, {"type": "null"}]}
+_NULLABLE_NUMBER = {"anyOf": [{"type": "number"}, {"type": "null"}]}
 
 SELLER_EXTRACTION_SCHEMA = {
     "type": "json_schema",
@@ -61,19 +70,19 @@ SELLER_EXTRACTION_SCHEMA = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "vehicle_type": {"type": ["string", "null"]},
-                            "make": {"type": ["string", "null"]},
-                            "model": {"type": ["string", "null"]},
-                            "year": {"type": ["integer", "null"]},
-                            "mileage": {"type": ["integer", "null"]},
-                            "price": {"type": ["number", "null"]},
-                            "location": {"type": ["string", "null"]},
-                            "engine_type": {"type": ["string", "null"]},
-                            "condition": {"type": ["string", "null"]},
-                            "quantity": {"type": ["integer", "null"]},
-                            "seller_name": {"type": ["string", "null"]},
-                            "seller_contact": {"type": ["string", "null"]},
-                            "description": {"type": ["string", "null"]},
+                            "vehicle_type": _NULLABLE_STRING,
+                            "make": _NULLABLE_STRING,
+                            "model": _NULLABLE_STRING,
+                            "year": _NULLABLE_INT,
+                            "mileage": _NULLABLE_INT,
+                            "price": _NULLABLE_NUMBER,
+                            "location": _NULLABLE_STRING,
+                            "engine_type": _NULLABLE_STRING,
+                            "condition": _NULLABLE_STRING,
+                            "quantity": _NULLABLE_INT,
+                            "seller_name": _NULLABLE_STRING,
+                            "seller_contact": _NULLABLE_STRING,
+                            "description": _NULLABLE_STRING,
                         },
                         "required": [
                             "vehicle_type", "make", "model", "year", "mileage",
@@ -83,8 +92,21 @@ SELLER_EXTRACTION_SCHEMA = {
                         "additionalProperties": False,
                     },
                 },
+                "source_mappings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string"},
+                            "snippet": _NULLABLE_STRING,
+                            "listing_index": {"type": "integer"},
+                        },
+                        "required": ["field", "snippet", "listing_index"],
+                        "additionalProperties": False,
+                    },
+                },
             },
-            "required": ["listings"],
+            "required": ["listings", "source_mappings"],
             "additionalProperties": False,
         },
     },
@@ -111,7 +133,12 @@ For EACH distinct vehicle request, extract:
 - buyer_contact: email or phone of the buyer
 - description: what they're looking for in their own words
 
-If one email contains multiple distinct requests (e.g., "looking for a Cascadia AND a reefer trailer"), return one object per request."""
+If one email contains multiple distinct requests (e.g., "looking for a Cascadia AND a reefer trailer"), return one object per request.
+
+For each field you extract, also provide the original text snippet from the email
+in the "source_mappings" array. Each entry should have the field name, the verbatim
+snippet from the email where you found that information, and the index of the request
+it belongs to (0-based)."""
 
 BUYER_EXTRACTION_SCHEMA = {
     "type": "json_schema",
@@ -126,19 +153,19 @@ BUYER_EXTRACTION_SCHEMA = {
                     "items": {
                         "type": "object",
                         "properties": {
-                            "vehicle_type": {"type": ["string", "null"]},
-                            "make": {"type": ["string", "null"]},
-                            "model": {"type": ["string", "null"]},
-                            "year_min": {"type": ["integer", "null"]},
-                            "year_max": {"type": ["integer", "null"]},
-                            "mileage_max": {"type": ["integer", "null"]},
-                            "price_min": {"type": ["number", "null"]},
-                            "price_max": {"type": ["number", "null"]},
-                            "location": {"type": ["string", "null"]},
-                            "engine_type": {"type": ["string", "null"]},
-                            "buyer_name": {"type": ["string", "null"]},
-                            "buyer_contact": {"type": ["string", "null"]},
-                            "description": {"type": ["string", "null"]},
+                            "vehicle_type": _NULLABLE_STRING,
+                            "make": _NULLABLE_STRING,
+                            "model": _NULLABLE_STRING,
+                            "year_min": _NULLABLE_INT,
+                            "year_max": _NULLABLE_INT,
+                            "mileage_max": _NULLABLE_INT,
+                            "price_min": _NULLABLE_NUMBER,
+                            "price_max": _NULLABLE_NUMBER,
+                            "location": _NULLABLE_STRING,
+                            "engine_type": _NULLABLE_STRING,
+                            "buyer_name": _NULLABLE_STRING,
+                            "buyer_contact": _NULLABLE_STRING,
+                            "description": _NULLABLE_STRING,
                         },
                         "required": [
                             "vehicle_type", "make", "model", "year_min", "year_max",
@@ -148,23 +175,39 @@ BUYER_EXTRACTION_SCHEMA = {
                         "additionalProperties": False,
                     },
                 },
+                "source_mappings": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "field": {"type": "string"},
+                            "snippet": _NULLABLE_STRING,
+                            "listing_index": {"type": "integer"},
+                        },
+                        "required": ["field", "snippet", "listing_index"],
+                        "additionalProperties": False,
+                    },
+                },
             },
-            "required": ["requests"],
+            "required": ["requests", "source_mappings"],
             "additionalProperties": False,
         },
     },
 }
 
 
-def classify_email(subject: str, body: str) -> str:
+def classify_email(subject: str, body: str, glossary_section: str = "") -> str:
     """Classify an email as seller_listing, buyer_request, or irrelevant."""
     start = time.time()
+    system_prompt = CLASSIFICATION_SYSTEM_PROMPT
+    if glossary_section:
+        system_prompt = system_prompt + "\n" + glossary_section
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             temperature=0,
             messages=[
-                {"role": "system", "content": CLASSIFICATION_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Subject: {subject}\n\nBody:\n{body}"},
             ],
             max_tokens=20,
@@ -191,20 +234,26 @@ def classify_email(subject: str, body: str) -> str:
         return "parse_error"
 
 
-def extract_listings(subject: str, body: str) -> list[dict]:
-    """Extract structured listing data from a seller email."""
+def extract_listings(subject: str, body: str, glossary_section: str = "") -> tuple[list[dict], list[dict]]:
+    """Extract structured listing data from a seller email.
+
+    Returns (listings, source_mappings).
+    """
     start = time.time()
+    system_prompt = SELLER_EXTRACTION_SYSTEM_PROMPT
+    if glossary_section:
+        system_prompt = system_prompt + "\n" + glossary_section
     try:
-        # Chunk large emails
         chunks = _chunk_text(body, max_chars=8000)
         all_listings = []
+        all_mappings = []
 
-        for chunk in chunks:
+        for chunk_idx, chunk in enumerate(chunks):
             response = client.chat.completions.create(
                 model="gpt-4o",
                 temperature=0,
                 messages=[
-                    {"role": "system", "content": SELLER_EXTRACTION_SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"Subject: {subject}\n\nBody:\n{chunk}"},
                 ],
                 response_format=SELLER_EXTRACTION_SCHEMA,
@@ -213,6 +262,7 @@ def extract_listings(subject: str, body: str) -> list[dict]:
             content = response.choices[0].message.content
             data = json.loads(content)
             listings = data.get("listings", [])
+            mappings = data.get("source_mappings", [])
 
             tokens = response.usage
             logger.info(
@@ -222,28 +272,39 @@ def extract_listings(subject: str, body: str) -> list[dict]:
                 tokens.completion_tokens if tokens else 0,
             )
 
+            offset = len(all_listings)
             for listing in listings:
-                # Clean up null quantities to default 1
                 if listing.get("quantity") is None:
                     listing["quantity"] = 1
                 all_listings.append(listing)
 
-        return all_listings
+            # Adjust listing_index for multi-chunk
+            for mapping in mappings:
+                mapping["listing_index"] = mapping.get("listing_index", 0) + offset
+            all_mappings.extend(mappings)
+
+        return all_listings, all_mappings
 
     except Exception:
         logger.exception("Listing extraction failed")
-        return []
+        return [], []
 
 
-def extract_buyer_requests(subject: str, body: str) -> list[dict]:
-    """Extract structured buyer request data from a buyer email."""
+def extract_buyer_requests(subject: str, body: str, glossary_section: str = "") -> tuple[list[dict], list[dict]]:
+    """Extract structured buyer request data from a buyer email.
+
+    Returns (requests, source_mappings).
+    """
     start = time.time()
+    system_prompt = BUYER_EXTRACTION_SYSTEM_PROMPT
+    if glossary_section:
+        system_prompt = system_prompt + "\n" + glossary_section
     try:
         response = client.chat.completions.create(
             model="gpt-4o",
             temperature=0,
             messages=[
-                {"role": "system", "content": BUYER_EXTRACTION_SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Subject: {subject}\n\nBody:\n{body}"},
             ],
             response_format=BUYER_EXTRACTION_SCHEMA,
@@ -252,6 +313,7 @@ def extract_buyer_requests(subject: str, body: str) -> list[dict]:
         content = response.choices[0].message.content
         data = json.loads(content)
         requests = data.get("requests", [])
+        mappings = data.get("source_mappings", [])
 
         elapsed = time.time() - start
         tokens = response.usage
@@ -262,18 +324,21 @@ def extract_buyer_requests(subject: str, body: str) -> list[dict]:
             tokens.completion_tokens if tokens else 0,
         )
 
-        return requests
+        return requests, mappings
 
     except Exception:
         logger.exception("Buyer extraction failed")
-        return []
+        return [], []
 
 
-def extract_from_image(image_path: str, context: str = "") -> list[dict]:
+def extract_from_image(image_path: str, context: str = "", glossary_section: str = "") -> list[dict]:
     """Extract listing data from an image using GPT-4o vision."""
     import base64
 
     start = time.time()
+    system_prompt = SELLER_EXTRACTION_SYSTEM_PROMPT
+    if glossary_section:
+        system_prompt = system_prompt + "\n" + glossary_section
     try:
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode("utf-8")
@@ -282,7 +347,7 @@ def extract_from_image(image_path: str, context: str = "") -> list[dict]:
         media_type = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "gif": "gif", "webp": "webp"}.get(suffix, "jpeg")
 
         messages = [
-            {"role": "system", "content": SELLER_EXTRACTION_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": [

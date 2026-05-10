@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 # --- Listing schemas ---
@@ -30,15 +31,40 @@ class ListingResponse(ListingBase):
     archived_at: datetime | None = None
     first_seen_at: datetime | None = None
     last_seen_at: datetime | None = None
+    user_edited: bool = False
 
     model_config = {"from_attributes": True}
+
+
+class FieldSourceMapping(BaseModel):
+    field: str
+    snippet: str | None = None
+    listing_index: int = 0
 
 
 class ListingDetailResponse(ListingResponse):
     email: "EmailResponse | None" = None
     attachments: list["AttachmentResponse"] = []
+    source_mappings: list[FieldSourceMapping] = []
+    original_extracted_data: dict | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ListingUpdate(BaseModel):
+    vehicle_type: str | None = None
+    make: str | None = None
+    model: str | None = None
+    year: int | None = None
+    mileage: int | None = None
+    price: float | None = None
+    location: str | None = None
+    engine_type: str | None = None
+    condition: str | None = None
+    quantity: int | None = None
+    seller_name: str | None = None
+    seller_contact: str | None = None
+    description: str | None = None
 
 
 # --- Buyer request schemas ---
@@ -65,14 +91,33 @@ class BuyerRequestResponse(BuyerRequestBase):
     is_archived: bool = False
     archived_at: datetime | None = None
     first_seen_at: datetime | None = None
+    user_edited: bool = False
 
     model_config = {"from_attributes": True}
 
 
 class BuyerDetailResponse(BuyerRequestResponse):
     matches: list["MatchResponse"] = []
+    source_mappings: list[FieldSourceMapping] = []
+    original_extracted_data: dict | None = None
 
     model_config = {"from_attributes": True}
+
+
+class BuyerRequestUpdate(BaseModel):
+    vehicle_type: str | None = None
+    make: str | None = None
+    model: str | None = None
+    year_min: int | None = None
+    year_max: int | None = None
+    mileage_max: int | None = None
+    price_min: float | None = None
+    price_max: float | None = None
+    location: str | None = None
+    engine_type: str | None = None
+    buyer_name: str | None = None
+    buyer_contact: str | None = None
+    description: str | None = None
 
 
 # --- Price benchmark schemas ---
@@ -124,6 +169,8 @@ class EmailResponse(BaseModel):
     received_at: datetime | None = None
     classification: str | None = None
     processed_at: datetime | None = None
+    user_reclassified: bool = False
+    original_classification: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -174,3 +221,62 @@ class PaginatedResponse(BaseModel):
     page: int = 1
     per_page: int = 20
     pages: int = 0
+
+
+# --- Glossary schemas ---
+
+class GlossaryEntryCreate(BaseModel):
+    abbreviation: str = Field(min_length=1, max_length=20)
+    expansion: str = Field(min_length=1, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+
+
+class GlossaryEntryUpdate(BaseModel):
+    abbreviation: str | None = Field(default=None, max_length=20)
+    expansion: str | None = Field(default=None, max_length=200)
+    category: str | None = Field(default=None, max_length=50)
+
+
+class GlossaryEntryResponse(BaseModel):
+    id: int
+    abbreviation: str
+    expansion: str
+    category: str | None = None
+    source: str
+    is_deleted: bool = False
+    usage_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+# --- Feedback schemas ---
+
+class ReclassifyRequest(BaseModel):
+    classification: Literal["seller_listing", "buyer_request", "irrelevant"]
+
+
+class FieldCorrectionResponse(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: int
+    field_name: str
+    original_value: str | None = None
+    corrected_value: str | None = None
+    created_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ReparseResponse(BaseModel):
+    matches_deleted: int = 0
+
+
+class ReclassifyResponse(BaseModel):
+    matches_deleted: int = 0
+
+
+class SeedResponse(BaseModel):
+    added: int
+    message: str

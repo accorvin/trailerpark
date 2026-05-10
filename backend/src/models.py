@@ -30,6 +30,10 @@ class Email(Base):
     classification = Column(String, nullable=True)  # seller_listing, buyer_request, irrelevant, parse_error
     raw_json = Column(Text, nullable=True)
     processed_at = Column(DateTime, server_default=func.now())
+    user_reclassified = Column(Boolean, default=False)
+    original_classification = Column(String, nullable=True)
+    reprocessed_at = Column(DateTime, nullable=True)
+    preprocessed_text = Column(Text, nullable=True)
 
     listings = relationship("Listing", back_populates="email")
     buyer_requests = relationship("BuyerRequest", back_populates="email")
@@ -61,8 +65,13 @@ class Listing(Base):
     first_seen_at = Column(DateTime, server_default=func.now())
     last_seen_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    user_edited = Column(Boolean, default=False)
+    user_edited_at = Column(DateTime, nullable=True)
+    original_extracted_data = Column(Text, nullable=True)
+    source_mapping = Column(Text, nullable=True)
+
     email = relationship("Email", back_populates="listings")
-    matches = relationship("Match", back_populates="listing")
+    matches = relationship("Match", back_populates="listing", cascade="all, delete-orphan")
 
 
 class BuyerRequest(Base):
@@ -87,8 +96,13 @@ class BuyerRequest(Base):
     archived_at = Column(DateTime, nullable=True)
     first_seen_at = Column(DateTime, server_default=func.now())
 
+    user_edited = Column(Boolean, default=False)
+    user_edited_at = Column(DateTime, nullable=True)
+    original_extracted_data = Column(Text, nullable=True)
+    source_mapping = Column(Text, nullable=True)
+
     email = relationship("Email", back_populates="buyer_requests")
-    matches = relationship("Match", back_populates="buyer_request")
+    matches = relationship("Match", back_populates="buyer_request", cascade="all, delete-orphan")
 
 
 class PriceBenchmark(Base):
@@ -135,6 +149,32 @@ class Match(Base):
 
     buyer_request = relationship("BuyerRequest", back_populates="matches")
     listing = relationship("Listing", back_populates="matches")
+
+
+class GlossaryEntry(Base):
+    __tablename__ = "glossary_entries"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    abbreviation = Column(String(collation="NOCASE"), nullable=False, unique=True, index=True)
+    expansion = Column(String, nullable=False)
+    category = Column(String, nullable=True)
+    source = Column(String, nullable=False, default="seed")
+    is_deleted = Column(Boolean, default=False)
+    usage_count = Column(Integer, default=0)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class FieldCorrection(Base):
+    __tablename__ = "field_corrections"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    entity_type = Column(String, nullable=False)
+    entity_id = Column(Integer, nullable=False)
+    field_name = Column(String, nullable=False)
+    original_value = Column(String, nullable=True)
+    corrected_value = Column(String, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class GmailSyncState(Base):

@@ -20,11 +20,20 @@ export interface Listing {
   archived_at: string | null;
   first_seen_at: string | null;
   last_seen_at: string | null;
+  user_edited: boolean;
+}
+
+export interface FieldSourceMapping {
+  field: string;
+  snippet: string | null;
+  listing_index: number;
 }
 
 export interface ListingDetail extends Listing {
   email: Email | null;
   attachments: Attachment[];
+  source_mappings: FieldSourceMapping[];
+  original_extracted_data: Record<string, unknown> | null;
 }
 
 export interface BuyerRequest {
@@ -130,4 +139,26 @@ export interface PaginatedResponse<T> {
   page: number;
   per_page: number;
   pages: number;
+}
+
+export interface GlossaryEntry {
+  id: number;
+  abbreviation: string;
+  expansion: string;
+  category: string | null;
+  source: string;
+  is_deleted: boolean;
+  usage_count: number;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface FieldCorrection {
+  id: number;
+  entity_type: string;
+  entity_id: number;
+  field_name: string;
+  original_value: string | null;
+  corrected_value: string | null;
+  created_at: string | null;
 }

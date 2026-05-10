@@ -119,7 +119,7 @@ def health():
 
 
 # Import and register routers
-from .routers import listings, buyers, deals, matches, benchmarks, emails, stats, attachments, auth  # noqa: E402
+from .routers import listings, buyers, deals, matches, benchmarks, emails, stats, attachments, auth, glossary, feedback  # noqa: E402
 
 app.include_router(listings.router, prefix="/api")
 app.include_router(buyers.router, prefix="/api")
@@ -130,6 +130,8 @@ app.include_router(emails.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 app.include_router(attachments.router, prefix="/api")
 app.include_router(auth.router, prefix="/api")
+app.include_router(glossary.router, prefix="/api")
+app.include_router(feedback.router, prefix="/api")
 
 # Serve frontend static files in production
 if frontend_dist.exists():

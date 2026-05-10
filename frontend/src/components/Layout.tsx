@@ -8,6 +8,7 @@ const navItems = [
   { to: '/buyers', label: 'Buyers' },
   { to: '/matches', label: 'Matches' },
   { to: '/benchmarks', label: 'Benchmarks' },
+  { to: '/glossary', label: 'Glossary' },
   { to: '/archive', label: 'Archive' },
 ];
 

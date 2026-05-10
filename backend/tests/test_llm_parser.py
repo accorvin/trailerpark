@@ -76,13 +76,14 @@ class TestExtractListings:
                 "seller_name": "Big Rig Sales",
                 "seller_contact": "seller@test.com",
                 "description": "2022 Cascadia, 350k miles",
-            }]
+            }],
+            "source_mappings": []
         })
         mock_openai.chat.completions.create.return_value = _make_response(response_data)
 
         from src.services.llm_parser import extract_listings
 
-        result = extract_listings("Test Subject", "Test body")
+        result, mappings = extract_listings("Test Subject", "Test body")
         assert len(result) == 1
         assert result[0]["make"] == "Freightliner"
         assert result[0]["price"] == 65000
@@ -98,21 +99,23 @@ class TestExtractListings:
                  "year": 2021, "mileage": 400000, "price": 55000, "location": "Houston, TX",
                  "engine_type": "X15", "condition": "Good", "quantity": 1,
                  "seller_name": "Test", "seller_contact": "t@t.com", "description": "Truck 2"},
-            ]
+            ],
+            "source_mappings": []
         })
         mock_openai.chat.completions.create.return_value = _make_response(response_data)
 
         from src.services.llm_parser import extract_listings
 
-        result = extract_listings("Multiple trucks", "Two trucks for sale")
+        result, mappings = extract_listings("Multiple trucks", "Two trucks for sale")
         assert len(result) == 2
 
     def test_api_error_returns_empty(self, mock_openai):
         mock_openai.chat.completions.create.side_effect = Exception("API error")
         from src.services.llm_parser import extract_listings
 
-        result = extract_listings("Test", "Test")
+        result, mappings = extract_listings("Test", "Test")
         assert result == []
+        assert mappings == []
 
 
 class TestExtractBuyerRequests:
@@ -132,13 +135,14 @@ class TestExtractBuyerRequests:
                 "buyer_name": "Smith Logistics",
                 "buyer_contact": "buyer@test.com",
                 "description": "Looking for Cascadias",
-            }]
+            }],
+            "source_mappings": []
         })
         mock_openai.chat.completions.create.return_value = _make_response(response_data)
 
         from src.services.llm_parser import extract_buyer_requests
 
-        result = extract_buyer_requests("Looking for trucks", "Need Cascadias")
+        result, mappings = extract_buyer_requests("Looking for trucks", "Need Cascadias")
         assert len(result) == 1
         assert result[0]["make"] == "Freightliner"
         assert result[0]["price_max"] == 70000

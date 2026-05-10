@@ -3,6 +3,7 @@
 import json
 import logging
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 from pydantic import ValidationError
 
 from ..config import get_settings
-from ..models import Attachment, Email, GmailSyncState
+from ..models import Attachment, BuyerRequest, Email, GmailSyncState, Listing
 from ..schemas import BuyerRequestBase, ListingBase
 from .attachment_extractor import extract_text
 from .gmail_client import (
@@ -22,6 +23,7 @@ from .gmail_client import (
     is_gmail_configured,
     parse_message,
 )
+from .glossary import get_glossary_prompt_section, scan_and_record_matches
 from .llm_parser import classify_email, extract_buyer_requests, extract_listings
 
 logger = logging.getLogger(__name__)
@@ -99,6 +101,8 @@ def _process_message_ids(db: Session, service, message_ids: list[str]) -> int:
             logger.exception("Error processing Gmail message: %s", msg_id)
             db.rollback()
             _store_error_email(db, msg_id)
+        # Throttle to avoid OpenAI TPM rate limits
+        time.sleep(2)
     return processed
 
 
@@ -115,6 +119,8 @@ def _process_messages(db: Session, service, messages: list[dict]) -> int:
             logger.exception("Error processing Gmail message: %s", msg_id)
             db.rollback()
             _store_error_email(db, msg_id)
+        # Throttle to avoid OpenAI TPM rate limits
+        time.sleep(2)
     return processed
 
 
@@ -163,41 +169,216 @@ def _process_gmail_message(db: Session, service, msg: dict) -> int:
         )
         db.add(attachment)
 
+    # Get glossary for LLM prompt injection
+    glossary_section = get_glossary_prompt_section(db)
+
     # Classify email
     full_text = _build_full_text(email, attachment_texts)
-    classification = classify_email(email.subject or "", full_text)
+    classification = classify_email(email.subject or "", full_text, glossary_section=glossary_section)
     email.classification = classification
+    email.preprocessed_text = full_text
 
     # Extract structured data based on classification
     if classification == "seller_listing":
-        listings = extract_listings(email.subject or "", full_text)
-        for listing_data in listings:
+        listings_data, source_mappings = extract_listings(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, listing_data in enumerate(listings_data):
             try:
                 ListingBase.model_validate(listing_data)
             except ValidationError:
                 logger.warning("Skipping invalid listing from %s: %s", parsed["id"], listing_data)
                 continue
+            # Get source mappings for this listing
+            listing_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
             listing_data["email_id"] = parsed["id"]
-            from ..models import Listing
+            listing_data["source_mapping"] = json.dumps(listing_mappings) if listing_mappings else None
             listing = Listing(**listing_data)
             db.add(listing)
 
     elif classification == "buyer_request":
-        requests = extract_buyer_requests(email.subject or "", full_text)
-        for req_data in requests:
+        requests_data, source_mappings = extract_buyer_requests(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, req_data in enumerate(requests_data):
             try:
                 BuyerRequestBase.model_validate(req_data)
             except ValidationError:
                 logger.warning("Skipping invalid buyer request from %s: %s", parsed["id"], req_data)
                 continue
+            req_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
             req_data["email_id"] = parsed["id"]
-            from ..models import BuyerRequest
+            req_data["source_mapping"] = json.dumps(req_mappings) if req_mappings else None
             buyer_req = BuyerRequest(**req_data)
             db.add(buyer_req)
+
+    # Record glossary abbreviation matches found in the email text
+    scan_and_record_matches(db, full_text)
 
     db.commit()
     logger.info("Processed email: %s (classification: %s)", parsed["id"], classification)
     return 1
+
+
+def reparse_email(db: Session, email_id: str) -> dict:
+    """Re-parse an email: delete existing data and re-extract with current glossary.
+
+    Must be called with _scan_lock NOT held by us. Acquires lock internally.
+    Returns dict with status info.
+    """
+    email = db.get(Email, email_id)
+    if not email:
+        return {"error": "Email not found", "status": 404}
+
+    # Rate limiting: 60s cooldown
+    if email.reprocessed_at:
+        elapsed = (datetime.now(timezone.utc) - email.reprocessed_at.replace(tzinfo=timezone.utc)).total_seconds()
+        if elapsed < 60:
+            return {"error": "Please wait before re-parsing again", "status": 429}
+
+    if not _scan_lock.acquire(blocking=False):
+        return {"error": "Sync in progress, try again later", "status": 409}
+
+    try:
+        return _do_reparse(db, email)
+    finally:
+        _scan_lock.release()
+
+
+def _do_reparse(db: Session, email: Email) -> dict:
+    """Internal reparse logic. Assumes lock is held."""
+    glossary_section = get_glossary_prompt_section(db)
+    full_text = email.preprocessed_text or email.body_text or ""
+
+    # Count matches that will be deleted (for warning)
+    matches_deleted = 0
+    for listing in email.listings:
+        matches_deleted += len(listing.matches)
+    for buyer in email.buyer_requests:
+        matches_deleted += len(buyer.matches)
+
+    # Delete existing extracted data (cascade deletes matches)
+    for listing in list(email.listings):
+        db.delete(listing)
+    for buyer in list(email.buyer_requests):
+        db.delete(buyer)
+    db.flush()
+
+    # Re-extract
+    if email.classification == "seller_listing":
+        listings_data, source_mappings = extract_listings(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, listing_data in enumerate(listings_data):
+            try:
+                ListingBase.model_validate(listing_data)
+            except ValidationError:
+                continue
+            listing_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
+            listing_data["email_id"] = email.id
+            listing_data["source_mapping"] = json.dumps(listing_mappings) if listing_mappings else None
+            db.add(Listing(**listing_data))
+
+    elif email.classification == "buyer_request":
+        requests_data, source_mappings = extract_buyer_requests(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, req_data in enumerate(requests_data):
+            try:
+                BuyerRequestBase.model_validate(req_data)
+            except ValidationError:
+                continue
+            req_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
+            req_data["email_id"] = email.id
+            req_data["source_mapping"] = json.dumps(req_mappings) if req_mappings else None
+            db.add(BuyerRequest(**req_data))
+
+    email.reprocessed_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": 200, "matches_deleted": matches_deleted}
+
+
+def reclassify_email(db: Session, email_id: str, new_classification: str) -> dict:
+    """Reclassify an email and re-extract data for the new classification."""
+    email = db.get(Email, email_id)
+    if not email:
+        return {"error": "Email not found", "status": 404}
+
+    if new_classification not in ("seller_listing", "buyer_request", "irrelevant"):
+        return {"error": "Invalid classification", "status": 400}
+
+    # Rate limiting
+    if email.reprocessed_at:
+        elapsed = (datetime.now(timezone.utc) - email.reprocessed_at.replace(tzinfo=timezone.utc)).total_seconds()
+        if elapsed < 60:
+            return {"error": "Please wait before reclassifying again", "status": 429}
+
+    if not _scan_lock.acquire(blocking=False):
+        return {"error": "Sync in progress, try again later", "status": 409}
+
+    try:
+        return _do_reclassify(db, email, new_classification)
+    finally:
+        _scan_lock.release()
+
+
+def _do_reclassify(db: Session, email: Email, new_classification: str) -> dict:
+    """Internal reclassify logic. Assumes lock is held."""
+    glossary_section = get_glossary_prompt_section(db)
+    full_text = email.preprocessed_text or email.body_text or ""
+
+    # Count matches
+    matches_deleted = 0
+    for listing in email.listings:
+        matches_deleted += len(listing.matches)
+    for buyer in email.buyer_requests:
+        matches_deleted += len(buyer.matches)
+
+    # Store original classification
+    if not email.user_reclassified:
+        email.original_classification = email.classification
+    email.user_reclassified = True
+    email.classification = new_classification
+
+    # Delete existing extracted data
+    for listing in list(email.listings):
+        db.delete(listing)
+    for buyer in list(email.buyer_requests):
+        db.delete(buyer)
+    db.flush()
+
+    # Re-extract for new classification
+    if new_classification == "seller_listing":
+        listings_data, source_mappings = extract_listings(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, listing_data in enumerate(listings_data):
+            try:
+                ListingBase.model_validate(listing_data)
+            except ValidationError:
+                continue
+            listing_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
+            listing_data["email_id"] = email.id
+            listing_data["source_mapping"] = json.dumps(listing_mappings) if listing_mappings else None
+            db.add(Listing(**listing_data))
+
+    elif new_classification == "buyer_request":
+        requests_data, source_mappings = extract_buyer_requests(
+            email.subject or "", full_text, glossary_section=glossary_section
+        )
+        for idx, req_data in enumerate(requests_data):
+            try:
+                BuyerRequestBase.model_validate(req_data)
+            except ValidationError:
+                continue
+            req_mappings = [m for m in source_mappings if m.get("listing_index") == idx]
+            req_data["email_id"] = email.id
+            req_data["source_mapping"] = json.dumps(req_mappings) if req_mappings else None
+            db.add(BuyerRequest(**req_data))
+
+    email.reprocessed_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"status": 200, "matches_deleted": matches_deleted}
 
 
 def _build_full_text(email: Email, attachment_texts: list[str]) -> str:

@@ -1,5 +1,6 @@
 """Listings API endpoints."""
 
+import json
 import re
 
 from fastapi import APIRouter, Depends, Query
@@ -8,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models import Attachment, Listing
-from ..schemas import ListingDetailResponse, ListingResponse, PaginatedResponse
+from ..schemas import AttachmentResponse, ListingDetailResponse, ListingResponse, PaginatedResponse
 
 router = APIRouter(tags=["listings"])
 
@@ -110,8 +111,22 @@ def get_listing(listing_id: int, db: Session = Depends(get_db)):
     )
 
     result = ListingDetailResponse.model_validate(listing)
-    from ..schemas import AttachmentResponse, EmailResponse
     result.attachments = [AttachmentResponse.model_validate(a) for a in attachments]
+
+    # Parse source_mapping JSON
+    if listing.source_mapping:
+        try:
+            result.source_mappings = json.loads(listing.source_mapping)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # Parse original_extracted_data JSON
+    if listing.original_extracted_data:
+        try:
+            result.original_extracted_data = json.loads(listing.original_extracted_data)
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return result
 
 
